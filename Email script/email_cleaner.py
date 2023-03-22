@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+import time
 
 # Set the redirect URI and scopes
 REDIRECT_URI = 'https://localhost:5689/'
@@ -24,14 +25,17 @@ if os.path.exists(file_path):
             print('Creating a new one...')      
 
 if os.path.exists('token.pickle'):
+    os.remove('token.pickle')
+
+if os.path.exists('token.pickle'):
     print('Loading Saved Data from File...')
     with open('token.pickle', 'rb') as f:
         creds = pickle.load(f)
 
 if not creds or not creds.valid:
     if creds and creds.expired and creds.refresh_token:
-        print('Refreshing Token...')
-        creds.refresh(Request())
+            print('Refreshing Token...')
+            creds.refresh(Request())
     else:
         print('Fetching New Tokens...')
         flow = InstalledAppFlow.from_client_secrets_file(
@@ -53,6 +57,7 @@ service = build('gmail', 'v1', credentials=creds)
 
 # Get the list of all unread emails in the inbox
 result = service.users().messages().list(userId='me', labelIds=['INBOX'], q='is:Unread').execute()
+print('Reading emails to delete...')
 
 # Get the list of email IDs
 email_ids = [email['id'] for email in result['messages']]
@@ -84,10 +89,23 @@ for email_id in email_ids:
     try:
         date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
     except ValueError:
-        date = datetime.strptime(date_str, '%d %b %Y %H:%M:%S %z')
+        try:
+            date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S %z')
+        except ValueError:
+            date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S')
+            timezone_str = date_str[-6:]
+            sign = timezone_str[0]
+            hours = int(timezone_str[1:3])
+            minutes = int(timezone_str[3:])
+            if sign == '+':
+                delta = timedelta(hours=hours, minutes=minutes)
+            else:
+                delta = timedelta(hours=-hours, minutes=-minutes)
+            date = date + delta
+
 
     all_timezones = pytz.all_timezones
-    timezone_name = all_timezones[1]
+    timezone_name = all_timezones[0]
     tz = pytz.timezone(timezone_name)
     new_date = pytz.utc.normalize(datetime.now(pytz.utc))
     date = new_date.astimezone(tz)
@@ -97,23 +115,34 @@ for email_id in email_ids:
 
     # Calculate the difference in days
     difference = now - date
-    #difference_days = int(difference.total_seconds() / (24 * 3600))
-    difference_days = int(difference.total_seconds())
+    difference_days = int(difference.total_seconds() / (24 * 3600))
 
     # Convert the difference into a date object
     d = datetime.now() - timedelta(days=difference_days)
 
     # Query the API for all unread emails
-    query = "is:unread before:" #+ d.strftime("%Y/%m/%d")
+    query = "is:unread before:" + d.strftime("%Y/%m/%d")
+    print('Found some emails to delete...')
     
     results = service.users().messages().list(userId='me', q=query).execute()
+
+    messages = []
 
     # Check if the email is over a month old
     if 'messages' in results:
         messages = results['messages']
     for message in messages:
+        email_data = service.users().messages().get(userId='me', id=message['id']).execute()
+        headers = email_data['payload']['headers']
+        sender = ""
+        for header in headers:
+            if header['name'] == 'From':
+                sender = header['value']
+                break
         service.users().messages().trash(userId='me', id=message['id']).execute()
         print(f'Deleted email from {sender} with ID: {email_id}')
-        #sender = ''
     else:
+
         print(f"No emails for me to delete!")
+        print("Done!")
+        break
