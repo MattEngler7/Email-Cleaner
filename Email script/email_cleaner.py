@@ -142,7 +142,10 @@ for email_id in email_ids:
         service.users().messages().trash(userId='me', id=message['id']).execute()
         print(f'Deleted email from {sender} with ID: {email_id}')
     else:
-
+        def cleanup():
+            os.system('sudo pkill python')
+            os.system('sudo service apache2 reload')
         print(f"No emails for me to delete!")
         print("Done!")
         break
+    
