@@ -15,7 +15,14 @@ SCOPES = ('https://www.googleapis.com/auth/gmail.readonly', 'https://www.googlea
 creds = None
 
 #Look and see if file is already created. If it is created and empty delete it and create a new one with saved credentials. 
-file_path = '/Users/matthewengler/Desktop/Email script/token.pickle'
+# Construct file path dynamically based on operating system
+if os.name == 'posix':  # Unix-based system (Mac or Linux)
+    file_path = '/Users/matthewengler/Desktop/Email script/token.pickle'
+elif os.name == 'nt':  # Windows system
+    file_path = 'C:\\Users\\matthewengler\\Desktop\\Email script\\token.pickle'
+else:
+    raise Exception("Unsupported operating system")
+    
 if os.path.exists(file_path):
     with open(file_path, 'r', encoding='ISO-8859-1') as f:
         file_contnet = f.read()
@@ -37,9 +44,12 @@ if not creds or not creds.valid:
             print('Refreshing Token...')
             creds.refresh(Request())
     else:
-        print('Fetching New Tokens...')
+        print('Please Sign in...')
+
+        creds_file = os.path.join(os.getcwd(), 'credentials.json')
+
         flow = InstalledAppFlow.from_client_secrets_file(
-            '/Users/matthewengler/Desktop/Email script/credentials.json', SCOPES)
+            creds_file, SCOPES)
 
         # Use the redirect URI when running the local server
         flow.redirect_uri = REDIRECT_URI
@@ -90,18 +100,21 @@ for email_id in email_ids:
         date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
     except ValueError:
         try:
-            date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S %z')
+            date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S[ %z]')
         except ValueError:
-            date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S')
-            timezone_str = date_str[-6:]
-            sign = timezone_str[0]
-            hours = int(timezone_str[1:3])
-            minutes = int(timezone_str[3:])
-            if sign == '+':
-                delta = timedelta(hours=hours, minutes=minutes)
-            else:
-                delta = timedelta(hours=-hours, minutes=-minutes)
-            date = date + delta
+            try:
+                date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S %z')
+            except ValueError:
+                date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S')
+                timezone_str = date_str[-6:]
+                sign = timezone_str[0]
+                hours = int(timezone_str[1:3])
+                minutes = int(timezone_str[3:])
+                if sign == '+':
+                    delta = timedelta(hours=hours, minutes=minutes)
+                else:
+                    delta = timedelta(hours=-hours, minutes=-minutes)
+                date = date + delta
 
 
     all_timezones = pytz.all_timezones
@@ -135,6 +148,7 @@ for email_id in email_ids:
         email_data = service.users().messages().get(userId='me', id=message['id']).execute()
         headers = email_data['payload']['headers']
         sender = ""
+        email_id = ""
         for header in headers:
             if header['name'] == 'From':
                 sender = header['value']
