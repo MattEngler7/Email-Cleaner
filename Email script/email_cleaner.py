@@ -175,4 +175,4 @@ else:
         os.system('sudo pkill python')
         os.system('sudo service apache2 reload')
     print(f"No emails for me to delete!")
-    print("Enhoy a cleaner mailbox!")
+    print("Enjoy a cleaner mailbox!")
