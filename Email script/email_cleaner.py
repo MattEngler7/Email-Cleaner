@@ -64,13 +64,24 @@ if not creds or not creds.valid:
     # Save the credentials for the next run
     with open('token.pickle', 'wb') as f:
         print('Saving...')
+        print(" ")
         pickle.dump(creds, f)
 
 # Create the service object
 service = build('gmail', 'v1', credentials=creds)
 
 # Prompt user for their preferred option
-option = input("Enter 1 to delete all unread emails or 2 to delete emails older than a month: ")
+option = input("Enter ( 1 ) to delete ALL unread emails or ( 2 ) to delete emails OLDER THAN A MONTH: ")
+
+print(" ")
+
+# Prompt user for their preferred option
+option = ""
+while option not in ['1', '2']:
+    option = input("Enter ( 1 ) to delete ALL unread emails or ( 2 ) to delete emails OLDER THAN A MONTH:  ")
+    if option not in ['1', '2']:
+        print(" ")
+        print("Invalid option. Please try again.")
 
 # Get the list of all unread emails in the inbox
 if option == '1':
@@ -84,95 +95,96 @@ elif option == '2':
     d = now - difference
 
     query = "is:unread before:" + d.strftime("%Y/%m/%d")
-else:
-    print("Invalid option. Exiting...")
-    exit()
 
 result = service.users().messages().list(userId='me', labelIds=['INBOX'], q=query).execute()
 print('Reading emails to delete...')
 
-# Get the list of email IDs
-email_ids = [email['id'] for email in result['messages']]
+# Check if the 'messages' key is present in the result
+if 'messages' in result:
+    # Get the list of email IDs
+    email_ids = [email['id'] for email in result['messages']]
 
-# Iterate through the list of email IDs
-for email_id in email_ids:
-    # Get the data of the email
-    email_data = service.users().messages().get(userId='me', id=email_id).execute()
+    # Iterate through the list of email IDs
+    for email_id in email_ids:
+        # Get the data of the email
+        email_data = service.users().messages().get(userId='me', id=email_id).execute()
 
-    # Extract the email header information
-    headers = email_data['payload']['headers']
-
-    sender = ""
-    date_str = ""
-
-    # Get the header that contains the sender name
-    for header in headers:
-        if header['name'] == 'From':
-            sender = header['value']
-            break
-
-    # Get the header that contains the email date
-    for header in headers:
-        if header['name'] == 'Date':
-            date_str = header['value']
-            break
-
-    def clean_date(date_str):
-        # Remove timezone offset
-        date_str = re.sub(r'([-+]\d{2}):?(\d{2})$', r'\1\2', date_str)
-
-        try:
-            date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
-        except ValueError:
-            try:
-                date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S[ %z]')
-            except ValueError:
-                try:
-                    date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S %z')
-                except ValueError:
-                    if date_str[-1] == ':':
-                        date_str += '00'
-                    date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S')
-                    timezone_str = date_str[-6:]
-                    sign = timezone_str[0]
-                    hours = int(timezone_str[1:3])
-                    minutes = int(timezone_str[3:])
-                    if sign == '+':
-                        delta = timedelta(hours=hours, minutes=minutes)
-                    else:
-                        delta = timedelta(hours=-hours, minutes=-minutes)
-                    date = date + delta
-
-        return date
-
-    all_timezones = pytz.all_timezones
-    timezone_name = all_timezones[0]
-    tz = pytz.timezone(timezone_name)
-    new_date = pytz.utc.normalize(datetime.now(pytz.utc))
-    date = new_date.astimezone(tz)
-
-    # Query the API for all unread emails
-    results = service.users().messages().list(userId='me', q=query).execute()
-
-    messages = []
-
-    if 'messages' in results:
-        messages = results['messages']
-
-    for message in messages:
-        email_data = service.users().messages().get(userId='me', id=message['id']).execute()
+        # Extract the email header information
         headers = email_data['payload']['headers']
+
         sender = ""
-        email_id = ""
+        date_str = ""
+
+        # Get the header that contains the sender name
         for header in headers:
             if header['name'] == 'From':
                 sender = header['value']
                 break
-        service.users().messages().trash(userId='me', id=message['id']).execute()
-        print(f'Deleted email from {sender} with ID: {email_id}')
+
+        # Get the header that contains the email date
+        for header in headers:
+            if header['name'] == 'Date':
+                date_str = header['value']
+                break
+
+        def clean_date(date_str):
+            # Remove timezone offset
+            date_str = re.sub(r'([-+]\d{2}):?(\d{2})$', r'\1\2', date_str)
+
+            try:
+                date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
+            except ValueError:
+                try:
+                    date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S[ %z]')
+                except ValueError:
+                    try:
+                        date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S %z')
+                    except ValueError:
+                        if date_str[-1] == ':':
+                            date_str += '00'
+                        date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S')
+                        timezone_str = date_str[-6:]
+                        sign = timezone_str[0]
+                        hours = int(timezone_str[1:3])
+                        minutes = int(timezone_str[3:])
+                        if sign == '+':
+                            delta = timedelta(hours=hours, minutes=minutes)
+                        else:
+                            delta = timedelta(hours=-hours, minutes=-minutes)
+                        date = date + delta
+
+            return date
+
+        all_timezones = pytz.all_timezones
+        timezone_name = all_timezones[0]
+        tz = pytz.timezone(timezone_name)
+        new_date = pytz.utc.normalize(datetime.now(pytz.utc))
+        date = new_date.astimezone(tz)
+
+        # Query the API for all unread emails
+        results = service.users().messages().list(userId='me', q=query).execute()
+
+        messages = []
+
+        if 'messages' in results:
+            messages = results['messages']
+
+        for message in messages:
+            email_data = service.users().messages().get(userId='me', id=message['id']).execute()
+            headers = email_data['payload']['headers']
+            sender = ""
+            email_id = ""
+            for header in headers:
+                if header['name'] == 'From':
+                    sender = header['value']
+                    break
+            service.users().messages().trash(userId='me', id=message['id']).execute()
+            print(f'Deleted email from {sender} with ID: {email_id}')
+    else:
+        def cleanup():
+            os.system('sudo pkill python')
+            os.system('sudo service apache2 reload')
+        print(f"No emails for me to delete!")
+        print("Enjoy a cleaner mailbox!")
 else:
-    def cleanup():
-        os.system('sudo pkill python')
-        os.system('sudo service apache2 reload')
-    print(f"No emails for me to delete!")
-    print("Enjoy a cleaner mailbox!")
+    print("No emails found left for me to delete.")
