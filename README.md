@@ -3,6 +3,11 @@ Pretty self explanatory. It will ask permission to access your email and be able
 
 With the new update I implemented the choice for the user to decide if they would like to delete all unread emails or only ones that are over a month old. This gives the user the choice, if they would like a clean email box with no red notifications, saying they have unread emails. 
 
+USER CHOICES:
+1: Delete all unread emails
+2: Delete unread emails over a month old
+3: Close the program
+
 **RUN THE CODE IN YOUR TERMINAL USING**:
   **python3 email_cleaner.py**
 
