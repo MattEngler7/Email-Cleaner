@@ -71,15 +71,10 @@ if not creds or not creds.valid:
 service = build('gmail', 'v1', credentials=creds)
 
 # Prompt user for their preferred option
-option = input("Enter ( 1 ) to delete ALL unread emails or ( 2 ) to delete emails OLDER THAN A MONTH: ")
-
-print(" ")
-
-# Prompt user for their preferred option
 option = ""
-while option not in ['1', '2']:
-    option = input("Enter ( 1 ) to delete ALL unread emails or ( 2 ) to delete emails OLDER THAN A MONTH:  ")
-    if option not in ['1', '2']:
+while option not in ['1', '2', '3']:
+    option = input("Enter ( 1 ) to delete ALL unread emails or ( 2 ) to delete emails OLDER THAN A MONTH or ( 3 ) to EXIT:  ")
+    if option not in ['1', '2', '3']:
         print(" ")
         print("Invalid option. Please try again.")
 
@@ -95,6 +90,11 @@ elif option == '2':
     d = now - difference
 
     query = "is:unread before:" + d.strftime("%Y/%m/%d")
+
+# Gives the user a choice to close the program    
+elif option == '3':
+    print("Exiting the program, have a nice day!")
+    exit()    
 
 result = service.users().messages().list(userId='me', labelIds=['INBOX'], q=query).execute()
 print('Reading emails to delete...')
