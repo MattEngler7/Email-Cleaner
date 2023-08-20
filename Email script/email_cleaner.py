@@ -50,7 +50,8 @@ if not creds or not creds.valid:
     else:
         print('Please Sign in...')
 
-        creds_file = os.path.join(os.getcwd(), 'credentials.json')
+        script_directory = os.path.dirname(os.path.abspath(__file__))
+        creds_file = os.path.join(script_directory, 'credentials.json')
 
         flow = InstalledAppFlow.from_client_secrets_file(
             creds_file, SCOPES)
@@ -69,6 +70,13 @@ if not creds or not creds.valid:
 
 # Create the service object
 service = build('gmail', 'v1', credentials=creds)
+
+# Get the total number of emails in the inbox
+inbox_result = service.users().messages().list(userId='me', q='is:inbox').execute()
+total_emails = inbox_result.get('resultSizeEstimate', 0)
+
+# Set the batch size based on the total number of emails
+batch_size = min(total_emails, 500)
 
 # Prompt user for their preferred option
 option = ""
@@ -104,87 +112,21 @@ if 'messages' in result:
     # Get the list of email IDs
     email_ids = [email['id'] for email in result['messages']]
 
-    # Iterate through the list of email IDs
-    for email_id in email_ids:
-        # Get the data of the email
-        email_data = service.users().messages().get(userId='me', id=email_id).execute()
+    # Initialize the counter
+    deleted_count = 0
+    print(f"Deleting...")
 
-        # Extract the email header information
-        headers = email_data['payload']['headers']
+    while email_ids:
+        batch_request = {'ids': email_ids[:batch_size]}
+        response = service.users().messages().batchDelete(userId='me', body=batch_request).execute()
 
-        sender = ""
-        date_str = ""
+        if 'deleted' in response:
+            deleted_count += len(response['deleted'])
 
-        # Get the header that contains the sender name
-        for header in headers:
-            if header['name'] == 'From':
-                sender = header['value']
-                break
+        email_ids = email_ids[batch_size:]
 
-        # Get the header that contains the email date
-        for header in headers:
-            if header['name'] == 'Date':
-                date_str = header['value']
-                break
-
-        def clean_date(date_str):
-            # Remove timezone offset
-            date_str = re.sub(r'([-+]\d{2}):?(\d{2})$', r'\1\2', date_str)
-
-            try:
-                date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S %z')
-            except ValueError:
-                try:
-                    date = datetime.strptime(date_str, '%a, %d %b %Y %H:%M:%S[ %z]')
-                except ValueError:
-                    try:
-                        date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S %z')
-                    except ValueError:
-                        if date_str[-1] == ':':
-                            date_str += '00'
-                        date = datetime.strptime(date_str[:-6], '%a, %d %b %Y %H:%M:%S')
-                        timezone_str = date_str[-6:]
-                        sign = timezone_str[0]
-                        hours = int(timezone_str[1:3])
-                        minutes = int(timezone_str[3:])
-                        if sign == '+':
-                            delta = timedelta(hours=hours, minutes=minutes)
-                        else:
-                            delta = timedelta(hours=-hours, minutes=-minutes)
-                        date = date + delta
-
-            return date
-
-        all_timezones = pytz.all_timezones
-        timezone_name = all_timezones[0]
-        tz = pytz.timezone(timezone_name)
-        new_date = pytz.utc.normalize(datetime.now(pytz.utc))
-        date = new_date.astimezone(tz)
-
-        # Query the API for all unread emails
-        results = service.users().messages().list(userId='me', q=query).execute()
-
-        messages = []
-
-        if 'messages' in results:
-            messages = results['messages']
-
-        for message in messages:
-            email_data = service.users().messages().get(userId='me', id=message['id']).execute()
-            headers = email_data['payload']['headers']
-            sender = ""
-            email_id = ""
-            for header in headers:
-                if header['name'] == 'From':
-                    sender = header['value']
-                    break
-            service.users().messages().trash(userId='me', id=message['id']).execute()
-            print(f'Deleted email from {sender} with ID: {email_id}')
-    else:
-        def cleanup():
-            os.system('sudo pkill python')
-            os.system('sudo service apache2 reload')
-        print(f"No emails for me to delete!")
-        print("Enjoy a cleaner mailbox!")
+    print(f"Deleted {deleted_count} emails.")
+    print(f"All selected emails deleted successfully.")
 else:
-    print("No emails found left for me to delete.")
+    print(f"No emails found to delete.")
+    print(f"Enjoy a cleaner email. Have a nice day!")
